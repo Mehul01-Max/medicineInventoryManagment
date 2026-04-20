@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import dotenv from 'dotenv';
+
+const API_BASE = process.env.VITE_API_URL || '';
 
 const TOKEN_KEY = 'stocksmart.token';
 
