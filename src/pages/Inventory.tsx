@@ -28,9 +28,9 @@ const Inventory = () => {
     return [...list].sort((a, b) => a.name.localeCompare(b.name));
   }, [meds, query]);
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!toDelete) return;
-    store.deleteMedicine(toDelete.id);
+    await store.deleteMedicine(toDelete.id);
     toast.success(`Removed ${toDelete.name}`);
     setToDelete(null);
   };

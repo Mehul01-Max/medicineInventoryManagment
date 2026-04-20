@@ -29,7 +29,7 @@ export const EditMedicineDialog = ({ medicine, open, onOpenChange }: Props) => {
     }
   }, [medicine]);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!medicine) return;
     const stockN = parseInt(stock, 10);
@@ -38,7 +38,7 @@ export const EditMedicineDialog = ({ medicine, open, onOpenChange }: Props) => {
       toast.error('Please fill all fields');
       return;
     }
-    store.updateMedicine(medicine.id, {
+    await store.updateMedicine(medicine.id, {
       name: name.trim(),
       stock: Math.max(0, stockN),
       threshold: Math.max(0, thresholdN),

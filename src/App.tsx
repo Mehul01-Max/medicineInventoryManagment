@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppShell } from "@/components/AppShell";
+import { queryClient } from "@/lib/queryClient";
 import Index from "./pages/Index.tsx";
 import Welcome from "./pages/Welcome.tsx";
 import Login from "./pages/Login.tsx";
@@ -16,8 +17,6 @@ import Inventory from "./pages/Inventory.tsx";
 import AddMedicine from "./pages/AddMedicine.tsx";
 import More from "./pages/More.tsx";
 import NotFound from "./pages/NotFound.tsx";
-
-const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

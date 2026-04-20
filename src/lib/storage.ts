@@ -1,14 +1,14 @@
-// StockSmart data types & local storage layer
-// Designed to be easily swapped with a backend (Supabase) later.
+import { apiFetch } from './api';
+import { queryClient } from './queryClient';
 
 export type Medicine = {
   id: string;
   name: string;
   stock: number;
   threshold: number;
-  unit?: string; // e.g. "strip", "bottle", "tablet"
+  unit?: string;
   createdAt: number;
-  ordered?: boolean; // marked as reordered
+  ordered?: boolean;
   orderedAt?: number;
 };
 
@@ -16,93 +16,92 @@ export type SaleEntry = {
   id: string;
   medicineId: string;
   qty: number;
-  date: number; // ms since epoch
+  date: number;
 };
-
-const KEYS = {
-  medicines: 'stocksmart.medicines.v1',
-  sales: 'stocksmart.sales.v1',
-  onboarded: 'stocksmart.onboarded.v1',
-  emailConfig: 'stocksmart.emailconfig.v1',
-} as const;
-
-function read<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function write<T>(key: string, value: T) {
-  localStorage.setItem(key, JSON.stringify(value));
-  // notify listeners in same tab
-  window.dispatchEvent(new CustomEvent('stocksmart:change', { detail: { key } }));
-}
 
 export const store = {
-  // ----- medicines -----
-  getMedicines(): Medicine[] {
-    return read<Medicine[]>(KEYS.medicines, []);
-  },
-  saveMedicines(list: Medicine[]) {
-    write(KEYS.medicines, list);
-  },
-  addMedicine(m: Omit<Medicine, 'id' | 'createdAt'>): Medicine {
-    const list = store.getMedicines();
-    const newM: Medicine = { ...m, id: crypto.randomUUID(), createdAt: Date.now() };
-    write(KEYS.medicines, [newM, ...list]);
-    return newM;
-  },
-  updateMedicine(id: string, patch: Partial<Medicine>) {
-    const list = store.getMedicines().map(m => (m.id === id ? { ...m, ...patch } : m));
-    write(KEYS.medicines, list);
-  },
-  deleteMedicine(id: string) {
-    write(KEYS.medicines, store.getMedicines().filter(m => m.id !== id));
-    write(KEYS.sales, store.getSales().filter(s => s.medicineId !== id));
+  async getMedicines(): Promise<Medicine[]> {
+    return apiFetch<Medicine[]>('/api/medicines');
   },
 
-  // ----- sales -----
-  getSales(): SaleEntry[] {
-    return read<SaleEntry[]>(KEYS.sales, []);
-  },
-  recordSale(medicineId: string, qty: number) {
-    const sales = store.getSales();
-    const entry: SaleEntry = { id: crypto.randomUUID(), medicineId, qty, date: Date.now() };
-    write(KEYS.sales, [entry, ...sales]);
-    // reduce stock
-    const med = store.getMedicines().find(m => m.id === medicineId);
-    if (med) {
-      store.updateMedicine(medicineId, {
-        stock: Math.max(0, med.stock - qty),
-        ordered: false, // new sale resets the "ordered" flag if it falls again
-      });
-    }
-    return entry;
+  async addMedicine(m: Omit<Medicine, 'id' | 'createdAt'>): Promise<Medicine> {
+    const result = await apiFetch<Medicine>('/api/medicines', {
+      method: 'POST',
+      body: JSON.stringify(m),
+    });
+    queryClient.invalidateQueries({ queryKey: ['medicines'] });
+    return result;
   },
 
-  // ----- onboarding -----
+  async addMedicinesBatch(medicines: Omit<Medicine, 'id' | 'createdAt'>[]): Promise<Medicine[]> {
+    const result = await apiFetch<Medicine[]>('/api/medicines/batch', {
+      method: 'POST',
+      body: JSON.stringify({ medicines }),
+    });
+    queryClient.invalidateQueries({ queryKey: ['medicines'] });
+    return result;
+  },
+
+  async updateMedicine(id: string, patch: Partial<Medicine>): Promise<Medicine> {
+    const result = await apiFetch<Medicine>(`/api/medicines/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    queryClient.invalidateQueries({ queryKey: ['medicines'] });
+    return result;
+  },
+
+  async deleteMedicine(id: string): Promise<void> {
+    await apiFetch(`/api/medicines/${id}`, { method: 'DELETE' });
+    queryClient.invalidateQueries({ queryKey: ['medicines'] });
+    queryClient.invalidateQueries({ queryKey: ['sales'] });
+  },
+
+
+  async getSales(): Promise<SaleEntry[]> {
+    return apiFetch<SaleEntry[]>('/api/sales');
+  },
+
+  async recordSale(medicineId: string, qty: number): Promise<SaleEntry> {
+    const result = await apiFetch<SaleEntry>('/api/sales', {
+      method: 'POST',
+      body: JSON.stringify({ medicineId, qty }),
+    });
+    queryClient.invalidateQueries({ queryKey: ['medicines'] });
+    queryClient.invalidateQueries({ queryKey: ['sales'] });
+    return result;
+  },
+
+  async recordSalesBatch(sales: { medicineId: string; qty: number; date?: number }[], skipStockUpdate = false): Promise<SaleEntry[]> {
+    const result = await apiFetch<SaleEntry[]>('/api/sales/batch', {
+      method: 'POST',
+      body: JSON.stringify({ sales, skipStockUpdate }),
+    });
+    queryClient.invalidateQueries({ queryKey: ['medicines'] });
+    queryClient.invalidateQueries({ queryKey: ['sales'] });
+    return result;
+  },
+
+
   isOnboarded(): boolean {
-    return read<boolean>(KEYS.onboarded, false);
+    try {
+      return JSON.parse(localStorage.getItem('stocksmart.onboarded.v1') || 'false');
+    } catch {
+      return false;
+    }
   },
   setOnboarded(v: boolean) {
-    write(KEYS.onboarded, v);
+    localStorage.setItem('stocksmart.onboarded.v1', JSON.stringify(v));
   },
 
-  resetAll() {
-    localStorage.removeItem(KEYS.medicines);
-    localStorage.removeItem(KEYS.sales);
-    localStorage.removeItem(KEYS.onboarded);
-    localStorage.removeItem(KEYS.emailConfig);
-    window.dispatchEvent(new CustomEvent('stocksmart:change', { detail: { key: 'all' } }));
+  async resetAll(): Promise<void> {
+    await apiFetch('/api/medicines/all', { method: 'DELETE' });
+    queryClient.invalidateQueries({ queryKey: ['medicines'] });
+    queryClient.invalidateQueries({ queryKey: ['sales'] });
   },
 };
 
-// ----- Reorder logic (rule-based, no AI) -----
-// avg daily sales over last `windowDays` (default 7) + safety buffer (default 5 days)
+
 const SAFETY_BUFFER_DAYS = 5;
 const WINDOW_DAYS = 7;
 
@@ -121,13 +120,11 @@ export function suggestReorder(med: Medicine, sales: SaleEntry[]): {
 } {
   const avgDaily = getDailyAverage(med.id, sales);
   const daysRemaining = avgDaily > 0 ? Math.floor(med.stock / avgDaily) : null;
-  // target: cover ~14 days worth + safety buffer; minimum top-up to threshold + buffer
   let suggested: number;
   if (avgDaily > 0) {
     const targetStock = Math.ceil(avgDaily * (14 + SAFETY_BUFFER_DAYS));
     suggested = Math.max(med.threshold * 2, targetStock - med.stock);
   } else {
-    // No sales history — refill to 2x threshold
     suggested = Math.max(med.threshold * 2 - med.stock, med.threshold);
   }
   return { avgDaily, daysRemaining, suggested: Math.max(1, Math.round(suggested)) };

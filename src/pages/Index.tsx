@@ -13,13 +13,10 @@ const Index = () => {
     );
   }
 
-  // Not logged in → go to login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // Logged in but not onboarded → welcome
-  // Logged in and onboarded → dashboard
   return <Navigate to={store.isOnboarded() ? '/home' : '/welcome'} replace />;
 };
 

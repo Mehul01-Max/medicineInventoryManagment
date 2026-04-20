@@ -26,44 +26,59 @@ const More = () => {
   const [sales] = useSales();
   const [showReset, setShowReset] = useState(false);
   const [showLogout, setShowLogout] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleSample = () => {
-    SAMPLE.forEach(m => store.addMedicine(m));
-    // record some sales over the past week so suggestions work
-    const now = Date.now();
-    const sales = [
-      { name: 'Paracetamol 500mg', dailyAvg: 4 },
-      { name: 'Amoxicillin 250mg', dailyAvg: 2 },
-      { name: 'Cetirizine 10mg', dailyAvg: 1 },
-      { name: 'ORS sachets', dailyAvg: 3 },
-    ];
-    const list = store.getMedicines();
-    sales.forEach(({ name, dailyAvg }) => {
-      const med = list.find(m => m.name === name);
-      if (!med) return;
-      for (let d = 0; d < 7; d++) {
-        for (let i = 0; i < dailyAvg; i++) {
-          const entry = {
-            id: crypto.randomUUID(),
-            medicineId: med.id,
-            qty: 1,
-            date: now - d * 86_400_000 - i * 1000,
-          };
-          const all = store.getSales();
-          localStorage.setItem('stocksmart.sales.v1', JSON.stringify([entry, ...all]));
+  const handleSample = async () => {
+    setLoading(true);
+    try {
+      const created = await store.addMedicinesBatch(SAMPLE);
+
+      const salesData = [
+        { name: 'Paracetamol 500mg', dailyAvg: 4 },
+        { name: 'Amoxicillin 250mg', dailyAvg: 2 },
+        { name: 'Cetirizine 10mg', dailyAvg: 1 },
+        { name: 'ORS sachets', dailyAvg: 3 },
+      ];
+
+      const batchSales: { medicineId: string; qty: number; date: number }[] = [];
+      const now = Date.now();
+
+      for (const { name, dailyAvg } of salesData) {
+        const med = created.find(m => m.name === name);
+        if (!med) continue;
+        for (let d = 0; d < 7; d++) {
+          for (let i = 0; i < dailyAvg; i++) {
+            batchSales.push({
+              medicineId: med.id,
+              qty: 1,
+              date: now - d * 86_400_000 - i * 1000,
+            });
+          }
         }
       }
-    });
-    window.dispatchEvent(new CustomEvent('stocksmart:change', { detail: { key: 'all' } }));
-    toast.success('Sample data added');
+
+      if (batchSales.length > 0) {
+        await store.recordSalesBatch(batchSales, true);
+      }
+
+      toast.success('Sample data added');
+    } catch (err) {
+      toast.error('Failed to add sample data');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReset = () => {
-    store.resetAll();
-    setShowReset(false);
-    toast.success('All data cleared');
+  const handleReset = async () => {
+    try {
+      await store.resetAll();
+      setShowReset(false);
+      toast.success('All data cleared');
+    } catch {
+      toast.error('Failed to clear data');
+    }
   };
 
   const handleLogout = () => {
@@ -78,7 +93,6 @@ const More = () => {
       <PageHeader title="More" />
 
       <main className="flex-1 px-4 pt-3 pb-6 space-y-6">
-        {/* User info card */}
         {user && (
           <section className="rounded-2xl bg-card border border-border p-4 flex items-center gap-3">
             <div className="h-11 w-11 rounded-full bg-gradient-primary text-primary-foreground flex items-center justify-center flex-shrink-0">
@@ -107,9 +121,10 @@ const More = () => {
             variant="secondary"
             className="w-full h-12 justify-start"
             onClick={handleSample}
+            disabled={loading}
           >
             <Sparkles className="h-4 w-4 mr-2" />
-            Load sample data
+            {loading ? 'Loading...' : 'Load sample data'}
           </Button>
 
           <Button
@@ -134,17 +149,16 @@ const More = () => {
         </section>
 
         <p className="text-center text-xs text-muted-foreground">
-          StockSmart v1 • Data stored on your device
+          StockSmart v2 • Data synced to your account
         </p>
       </main>
 
-      {/* Reset dialog */}
       <AlertDialog open={showReset} onOpenChange={setShowReset}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Clear everything?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes all your medicines and sales history from this device.
+              This permanently removes all your medicines and sales history.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -156,7 +170,6 @@ const More = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Logout dialog */}
       <AlertDialog open={showLogout} onOpenChange={setShowLogout}>
         <AlertDialogContent>
           <AlertDialogHeader>

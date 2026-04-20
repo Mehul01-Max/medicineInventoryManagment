@@ -1,61 +1,18 @@
-// StockSmart Auth — localStorage-based authentication
-// Passwords hashed with SHA-256 via Web Crypto API
+import { apiFetch, getToken, setToken } from './api';
 
-export type User = {
+export type SessionUser = {
   id: string;
   email: string;
   name: string;
-  passwordHash: string;
   createdAt: number;
 };
 
-export type SessionUser = Omit<User, 'passwordHash'>;
-
-const KEYS = {
-  users: 'stocksmart.users.v1',
-  session: 'stocksmart.session.v1',
-} as const;
-
-// ---- Crypto helpers ----
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// ---- Storage helpers ----
-
-function getUsers(): User[] {
+export async function getCurrentUser(): Promise<SessionUser | null> {
+  const token = getToken();
+  if (!token) return null;
   try {
-    const raw = localStorage.getItem(KEYS.users);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveUsers(users: User[]) {
-  localStorage.setItem(KEYS.users, JSON.stringify(users));
-}
-
-function setSession(user: SessionUser | null) {
-  if (user) {
-    localStorage.setItem(KEYS.session, JSON.stringify(user));
-  } else {
-    localStorage.removeItem(KEYS.session);
-  }
-  window.dispatchEvent(new CustomEvent('stocksmart:auth', { detail: { user } }));
-}
-
-// ---- Public API ----
-
-export function getCurrentUser(): SessionUser | null {
-  try {
-    const raw = localStorage.getItem(KEYS.session);
-    return raw ? JSON.parse(raw) : null;
+    const { user } = await apiFetch<{ user: SessionUser }>('/api/auth/me');
+    return user;
   } catch {
     return null;
   }
@@ -66,76 +23,37 @@ export async function signup(
   name: string,
   password: string
 ): Promise<{ ok: boolean; user?: SessionUser; error?: string }> {
-  const trimmedEmail = email.trim().toLowerCase();
-  const trimmedName = name.trim();
-
-  if (!trimmedEmail || !trimmedName || !password) {
-    return { ok: false, error: 'All fields are required.' };
+  try {
+    const { token, user } = await apiFetch<{ token: string; user: SessionUser }>('/api/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify({ email, name, password }),
+    });
+    setToken(token);
+    return { ok: true, user };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Signup failed';
+    return { ok: false, error: message };
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-    return { ok: false, error: 'Please enter a valid email address.' };
-  }
-  if (password.length < 6) {
-    return { ok: false, error: 'Password must be at least 6 characters.' };
-  }
-
-  const users = getUsers();
-  if (users.some(u => u.email === trimmedEmail)) {
-    return { ok: false, error: 'An account with this email already exists.' };
-  }
-
-  const passwordHash = await hashPassword(password);
-  const newUser: User = {
-    id: crypto.randomUUID(),
-    email: trimmedEmail,
-    name: trimmedName,
-    passwordHash,
-    createdAt: Date.now(),
-  };
-
-  saveUsers([...users, newUser]);
-
-  const sessionUser: SessionUser = {
-    id: newUser.id,
-    email: newUser.email,
-    name: newUser.name,
-    createdAt: newUser.createdAt,
-  };
-  setSession(sessionUser);
-  return { ok: true, user: sessionUser };
 }
 
 export async function login(
   email: string,
   password: string
 ): Promise<{ ok: boolean; user?: SessionUser; error?: string }> {
-  const trimmedEmail = email.trim().toLowerCase();
-
-  if (!trimmedEmail || !password) {
-    return { ok: false, error: 'Email and password are required.' };
+  try {
+    const { token, user } = await apiFetch<{ token: string; user: SessionUser }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+    setToken(token);
+    return { ok: true, user };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Login failed';
+    return { ok: false, error: message };
   }
-
-  const users = getUsers();
-  const user = users.find(u => u.email === trimmedEmail);
-  if (!user) {
-    return { ok: false, error: 'Invalid email or password.' };
-  }
-
-  const passwordHash = await hashPassword(password);
-  if (user.passwordHash !== passwordHash) {
-    return { ok: false, error: 'Invalid email or password.' };
-  }
-
-  const sessionUser: SessionUser = {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    createdAt: user.createdAt,
-  };
-  setSession(sessionUser);
-  return { ok: true, user: sessionUser };
 }
 
 export function logout() {
-  setSession(null);
+  setToken(null);
+  window.dispatchEvent(new CustomEvent('stocksmart:auth', { detail: { user: null } }));
 }

@@ -36,7 +36,7 @@ const Welcome = () => {
             <Feature
               icon={<Zap className="h-5 w-5" />}
               title="Smart reorder suggestions"
-              description="Based on your daily sales — no guesswork, no AI hype."
+              description="Based on your daily sales — smart, data-driven suggestions."
             />
             <Feature
               icon={<ShieldCheck className="h-5 w-5" />}

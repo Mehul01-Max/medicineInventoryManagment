@@ -33,8 +33,10 @@ const Sales = () => {
 
   const totalItems = Object.values(draft).reduce((a, b) => a + b, 0);
 
-  const recordAll = () => {
-    Object.entries(draft).forEach(([id, qty]) => store.recordSale(id, qty));
+  const recordAll = async () => {
+    for (const [id, qty] of Object.entries(draft)) {
+      await store.recordSale(id, qty);
+    }
     toast.success(`Recorded ${totalItems} sale${totalItems === 1 ? '' : 's'}`);
     setDraft({});
   };

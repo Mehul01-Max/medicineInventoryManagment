@@ -15,13 +15,13 @@ export const MedicineCard = ({ medicine, sales, showReorder = true }: Props) => 
   const status = getStockStatus(medicine);
   const { daysRemaining, suggested, avgDaily } = suggestReorder(medicine, sales);
 
-  const handleMarkOrdered = () => {
-    store.updateMedicine(medicine.id, { ordered: true, orderedAt: Date.now() });
+  const handleMarkOrdered = async () => {
+    await store.updateMedicine(medicine.id, { ordered: true, orderedAt: Date.now() });
     toast.success(`Marked "${medicine.name}" as ordered`);
   };
 
-  const handleRestock = () => {
-    store.updateMedicine(medicine.id, {
+  const handleRestock = async () => {
+    await store.updateMedicine(medicine.id, {
       stock: medicine.stock + suggested,
       ordered: false,
     });

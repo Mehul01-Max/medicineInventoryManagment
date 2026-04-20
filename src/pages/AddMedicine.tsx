@@ -26,7 +26,7 @@ const AddMedicine = () => {
     setThreshold('');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const stockN = parseInt(stock, 10);
     const thresholdN = parseInt(threshold, 10);
@@ -34,7 +34,7 @@ const AddMedicine = () => {
     if (isNaN(stockN) || stockN < 0) return toast.error('Enter valid stock');
     if (isNaN(thresholdN) || thresholdN < 0) return toast.error('Enter valid threshold');
 
-    store.addMedicine({
+    await store.addMedicine({
       name: name.trim(),
       stock: stockN,
       threshold: thresholdN,
@@ -45,7 +45,6 @@ const AddMedicine = () => {
 
     if (addAnother) {
       reset();
-      // focus name field
       requestAnimationFrame(() => {
         document.getElementById('med-name')?.focus();
       });
@@ -62,7 +61,6 @@ const AddMedicine = () => {
       const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
       if (lines.length === 0) return toast.error('CSV is empty');
 
-      // detect header
       const first = lines[0].toLowerCase();
       const hasHeader = first.includes('name') || first.includes('stock');
       const dataLines = hasHeader ? lines.slice(1) : lines;
@@ -74,7 +72,7 @@ const AddMedicine = () => {
         const sN = parseInt(s, 10);
         const tN = parseInt(t, 10);
         if (!n || isNaN(sN) || isNaN(tN)) continue;
-        store.addMedicine({ name: n, stock: sN, threshold: tN, unit: u || undefined });
+        await store.addMedicine({ name: n, stock: sN, threshold: tN, unit: u || undefined });
         added++;
       }
       if (added === 0) {

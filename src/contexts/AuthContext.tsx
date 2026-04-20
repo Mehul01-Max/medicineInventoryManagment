@@ -6,6 +6,7 @@ import {
   logout as authLogout,
   type SessionUser,
 } from '@/lib/auth';
+import { getToken } from '@/lib/api';
 
 type AuthContextType = {
   user: SessionUser | null;
@@ -21,25 +22,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Hydrate from localStorage on mount
   useEffect(() => {
-    setUser(getCurrentUser());
-    setLoading(false);
+    const hydrate = async () => {
+      if (getToken()) {
+        const u = await getCurrentUser();
+        setUser(u);
+      }
+      setLoading(false);
+    };
+    hydrate();
   }, []);
 
-  // Listen for auth changes (e.g. logout in another tab)
   useEffect(() => {
     const onAuth = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       setUser(detail?.user ?? null);
     };
-    const onStorage = () => setUser(getCurrentUser());
     window.addEventListener('stocksmart:auth', onAuth);
-    window.addEventListener('storage', onStorage);
-    return () => {
-      window.removeEventListener('stocksmart:auth', onAuth);
-      window.removeEventListener('storage', onStorage);
-    };
+    return () => window.removeEventListener('stocksmart:auth', onAuth);
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -47,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!result.ok) {
       return { ok: false, error: result.error };
     }
-    setUser(result.user);
+    setUser(result.user!);
     return { ok: true };
   }, []);
 
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!result.ok) {
       return { ok: false, error: result.error };
     }
-    setUser(result.user);
+    setUser(result.user!);
     return { ok: true };
   }, []);
 
