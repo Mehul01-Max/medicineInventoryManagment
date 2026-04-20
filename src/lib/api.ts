@@ -1,6 +1,9 @@
-import dotenv from 'dotenv';
+let API_BASE = import.meta.env.VITE_API_URL || '';
 
-const API_BASE = process.env.VITE_API_URL || '';
+// Ensure API_BASE includes protocol in production to avoid relative path resolution
+if (API_BASE && !API_BASE.startsWith('http://') && !API_BASE.startsWith('https://')) {
+  API_BASE = `https://${API_BASE}`;
+}
 
 const TOKEN_KEY = 'stocksmart.token';
 
